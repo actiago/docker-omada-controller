@@ -36,6 +36,7 @@ For instructions on running a legacy v3 or v4 controller, see the [README for v3
     * [Using non-default ports](#using-non-default-ports)
     * [Running Rootless](#running-rootless)
     * [Using Docker Compose](#using-docker-compose)
+    * [Using Podman](#using-podman)
     * [Using k8s](#using-k8s)
         * [Kubernetes Helm Chart](#kubernetes-helm-chart)
         * [Kubernetes Manifests](#kubernetes-manifests)
@@ -399,6 +400,24 @@ There are a few Docker Compose files available that can serve as a guide if you 
 <edit the compose file to match your persistent data needs>
 docker compose up -d
 ```
+
+### Using Podman
+
+Podman can run this image in place of Docker without changes — the same tags, environment variables and volume paths apply. A rootless example lives in [`podman/`](./podman/), where a [Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) unit lets systemd manage the container lifecycle (autostart at boot, `journalctl` logs, `Restart=always`):
+
+```bash
+mkdir -p ~/.config/containers/systemd
+cp podman/omada.container ~/.config/containers/systemd/
+systemctl --user daemon-reload
+systemctl --user start omada.service
+```
+
+Two Podman-specific caveats with `Network=host` networking:
+
+* The **host firewall** filters all controller traffic. On Fedora the default firewalld zone only allows ssh/cockpit, so the web UI will work on `localhost` but be unreachable from the LAN until the ports and discovery traffic are allowed. [`podman/open-firewall.sh`](./podman/open-firewall.sh) opens them.
+* With lingering enabled (`loginctl enable-linger $USER`), a Quadlet unit with `[Install] WantedBy=default.target` starts at boot without root and without `podman-compose`.
+
+See the [Podman deployment guide](./podman/README.md) for the full port matrix, low-resource tuning, verification steps and troubleshooting.
 
 ### Using k8s
 

@@ -1,0 +1,66 @@
+# Quadlet unit for TP-Link Omada Controller (rootless Podman)
+# Install to: ~/.config/containers/systemd/omada.container
+# Reload:     systemctl --user daemon-reload
+# Start:      systemctl --user start omada.service
+# Logs:       journalctl --user -u omada.service -f
+
+[Unit]
+Description=TP-Link Omada Controller (rootless Podman)
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=omada-controller
+# NOTE: v6 images ship MongoDB 8, which requires a CPU with AVX. The Celeron
+# N3350 in the fedora host has no AVX, so we pin the last v5 release instead.
+# v5.15 bundles MongoDB 3.6.8, which runs on this hardware (verified).
+Image=docker.io/mbentley/omada-controller:5.15.24.19
+Network=host
+
+Environment=PUID=508
+Environment=PGID=508
+# low resource host: 2 cores / 3.6 GiB RAM; keep the JVM heap and the MongoDB
+# WiredTiger cache small so the controller doesn't get OOM-killed
+Environment=JAVA_MAX_HEAP_SIZE=512m
+Environment=JAVA_MIN_HEAP_SIZE=128m
+Environment="MONGOD_EXTRA_ARGS=--wiredTigerCacheSizeGB 0.25"
+Environment=MANAGE_HTTP_PORT=8088
+Environment=MANAGE_HTTPS_PORT=8043
+Environment=PORTAL_HTTP_PORT=8088
+Environment=PORTAL_HTTPS_PORT=8843
+Environment=UPGRADE_HTTPS_PORT=8043
+# v6-only knobs, not used by the v5.15 image we pin above:
+# Environment=UPGRADE_ES_HTTPS_PORT=8044
+Environment=PORT_APP_DISCOVERY=27001
+Environment=PORT_DISCOVERY=29810
+Environment=PORT_MANAGER_V1=29811
+Environment=PORT_ADOPT_V1=29812
+Environment=PORT_UPGRADE_V1=29813
+Environment=PORT_MANAGER_V2=29814
+Environment=PORT_TRANSFER_V2=29815
+Environment=PORT_RTTY=29816
+Environment=WEB_CONFIG_OVERRIDE=false
+Environment=SHOW_SERVER_LOGS=true
+Environment=SHOW_MONGODB_LOGS=false
+Environment=SSL_CERT_NAME=tls.crt
+Environment=SSL_KEY_NAME=tls.key
+Environment=TZ=Etc/UTC
+
+Volume=omada-data:/opt/tplink/EAPController/data
+Volume=omada-logs:/opt/tplink/EAPController/logs
+
+# equivalent to the compose "ulimits" + "stop_grace_period"
+PodmanArgs=--ulimit nofile=4096:8192 --stop-timeout=60
+
+[Service]
+Restart=always
+# first start unpacks the controller and initializes MongoDB
+TimeoutStartSec=900
+TimeoutStopSec=90
+# guard rail on a 3.6 GiB host: a runaway JVM gets OOM-killed instead of
+# dragging the whole machine down with it
+MemoryHigh=1100M
+MemoryMax=1500M
+
+[Install]
+WantedBy=default.target
